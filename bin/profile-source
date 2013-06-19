@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+
+require 'delayed_job_active_record'
+require 'profile'
+require 'active_record'
+
+
+
+30.times do
+  fork do
+    ActiveRecord::Base.establish_connection(:adapter => "mysql", :host => "localhost", :username => "root", :database => "fac_test")
+
+    profiler = Profile.new("pid-#{$$}")
+    loop do
+      profiler.event("create a job") do
+        job = Delayed::Job.create!
+      end
+
+      profiler.report!  
+    end
+    exit(0)
+  end
+end
+
+Process.waitpid
