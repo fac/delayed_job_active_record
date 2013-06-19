@@ -52,10 +52,12 @@ module Delayed
         def self.reserve(worker, max_run_time = Worker.max_run_time)
           job_id = self.ampq_queue.pop.last.to_i
 
-          # This works on MySQL and possibly some other DBs that support UPDATE...LIMIT. It uses separate queries to lock and return the job
-          now = self.db_time_now
-          count = self.where(:id => job_id).limit(1).update_all(:locked_at => now, :locked_by => worker.name)
-          return count == 0 ? nil : self.find(job_id)
+          transaction do
+            job = self.ready_to_run(worker.name, max_run_time).where(:id => job_id).lock.first
+            return unless job
+            job.update_attributes!({ :locked_at => Time.now, :locked_by => worker.name }, { :without_protection => true })
+            return job
+          end
 
           # scope to filter to records that are "ready to run"
           ready_scope = self.ready_to_run(worker.name, max_run_time)
