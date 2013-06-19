@@ -28,6 +28,7 @@ end
 class Profile
 
   def initialize(name = '')
+    @start_time = Time.now
     @name = name
     @durations = SampleSet.new
   end
@@ -46,7 +47,7 @@ class Profile
   #
   def report!
     if Time.now - @durations.last_reset > 5.0
-      $stderr.write "#{@name}: %.02f jobs/sec  (%.02fms average insertion)\n" % [@durations.rate, @durations.average * 1000]
+      $stdout.write "%s %.03f %.03f %.02f\n" % [@name, Time.now - @start_time, @durations.rate, @durations.average * 1000]
 
       @durations.reset!
     end

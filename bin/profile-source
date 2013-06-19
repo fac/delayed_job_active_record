@@ -2,7 +2,6 @@
 
 require 'delayed_job_active_record'
 require 'profile'
-require 'active_record'
 
 
 

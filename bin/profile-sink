@@ -1,5 +1,42 @@
 #!/usr/bin/env ruby
 
 require 'delayed_job_active_record'
+require 'profile'
+
+ActiveRecord::Base.establish_connection(:adapter => "mysql", :host => "localhost", :username => "root", :database => "fac_test")
+
+WORKER_COUNT = (ARGV[0] || 1)
+
+Delayed::Job.delete_all
+
+10000.times do
+  Delayed::Job.create!
+end
 
 
+$stderr.puts "Starting with #{Delayed::Job.count} enqueued jobs..."
+$stderr.puts "Using #{WORKER_COUNT} workers..."
+WORKER_COUNT.to_i.times do
+  fork do
+    ActiveRecord::Base.establish_connection(:adapter => "mysql", :host => "localhost", :username => "root", :database => "fac_test")
+    worker = Delayed::Worker.new
+
+    profiler = Profile.new($$)
+    loop do
+      profiler.event("reserve a job") do
+        job = Delayed::Job.reserve(worker)
+        if job.nil?
+          profiler.report!
+          exit(0)
+        end
+        job.destroy
+        
+      end
+
+      profiler.report!  
+    end
+    exit(0)
+  end
+end
+
+Process.waitpid

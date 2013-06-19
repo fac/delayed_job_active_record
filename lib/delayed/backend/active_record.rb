@@ -75,6 +75,7 @@ module Delayed
             subquery_sql = "SELECT id FROM (#{subsubquery_sql}) AS x"
             quoted_table_name = self.connection.quote_table_name(self.table_name)
             sql = ["UPDATE #{quoted_table_name} SET locked_at = ?, locked_by = ? WHERE id IN (#{subquery_sql})", now, worker.name]
+            puts sql
             count = self.connection.execute(sanitize_sql(sql))
             return nil if count == 0
             # MSSQL JDBC doesn't support OUTPUT INSERTED.* for returning a result set, so query locked row
