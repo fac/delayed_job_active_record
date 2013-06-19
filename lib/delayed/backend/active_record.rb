@@ -7,6 +7,9 @@ module Delayed
       class Job < ::ActiveRecord::Base
         include Delayed::Backend::Base
 
+        cattr_accessor :ampq_queue
+        cattr_accessor :ampq_exchange
+
         if ::ActiveRecord::VERSION::MAJOR < 4 || defined?(::ActiveRecord::MassAssignmentSecurity)
           attr_accessible :priority, :run_at, :queue, :payload_object,
                           :failed_at, :locked_at, :locked_by, :handler
@@ -15,6 +18,11 @@ module Delayed
         scope :by_priority, lambda { order('priority ASC, run_at ASC') }
 
         before_save :set_default_run_at
+        after_create :ampq_enqueue
+
+        def ampq_enqueue
+          ampq_exchange.publish(id.to_s, :routing_key => ampq_queue.name)
+        end
 
         def self.set_delayed_job_table_name
           delayed_job_table_name = "#{::ActiveRecord::Base.table_name_prefix}delayed_jobs"
@@ -33,6 +41,7 @@ module Delayed
 
         def self.after_fork
           ::ActiveRecord::Base.establish_connection
+          # TODO: Grab a bunny connection?
         end
 
         # When a worker is exiting, make sure we don't have any locked jobs.
@@ -41,6 +50,13 @@ module Delayed
         end
 
         def self.reserve(worker, max_run_time = Worker.max_run_time)
+          job_id = self.ampq_queue.pop.last.to_i
+
+          # This works on MySQL and possibly some other DBs that support UPDATE...LIMIT. It uses separate queries to lock and return the job
+          now = self.db_time_now
+          count = self.where(:id => job_id).limit(1).update_all(:locked_at => now, :locked_by => worker.name)
+          return count == 0 ? nil : self.find(job_id)
+
           # scope to filter to records that are "ready to run"
           ready_scope = self.ready_to_run(worker.name, max_run_time)
 
