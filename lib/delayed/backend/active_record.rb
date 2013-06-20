@@ -17,7 +17,9 @@ module Delayed
         before_save :set_default_run_at
         after_commit :amqp_enqueue, :on => :create
 
-        cattr_accessor :amqp_queue_manager
+        cattr_accessor :amqp_priority_map
+        self.amqp_priority_map = Hash.new(:normal)
+
         attr_accessor :amqp_work_item
 
         def self.amqp_connect(*args)
@@ -34,7 +36,8 @@ module Delayed
         end
 
         def amqp_enqueue
-          @@amqp_manager.enqueue({ :job_id => self.id }, { :priority => :normal, :run_at => self.run_at })
+          @@amqp_manager.enqueue({ :job_id => self.id },
+            { :priority => amqp_priority_map.fetch(self.priority), :run_at => self.run_at })
         end
 
         def amqp_acknowledge
